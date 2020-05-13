@@ -319,7 +319,7 @@ def cvxopt(storage_size_list,house_pv,sp_pv,pandr_pv):
         storage_power=storage_max/8
         [buy_price,sell_price]=price()
         
-        pvl=house_pv*solar_data()+sp_pv*solar_data_flat()+pandr_pv*solar_data_10()
+        pvl=house_pv*solar_data()+sp_pv*solar_data_flat()+pandr_pv*solar_data_10()  #PV assumed to be accurately predictied by weather forecast
         fix_load=load_heat_data()+hot_water()    #load which assmued to be accurately predicted, which is heat load
         float_load=residential()+load_sciencepark()+car_charging()     #Load which cannot be predicited accurately, so predicted by data of a week ago
         use_load=fix_load+np.roll(float_load,7*48)   #Estimated total load to be used for cvxopt
@@ -380,7 +380,7 @@ def cvxopt(storage_size_list,house_pv,sp_pv,pandr_pv):
         lp.solve()
         '''
         
-        eff=math.sqrt(0.85)
+        eff=math.sqrt(0.85)         #Round trip efficiency = 0.85, so each process of charge or discharge has efficiency of sqrt(0.85)
         start=0
         end=365
         duration=(end-start)*48
@@ -392,7 +392,7 @@ def cvxopt(storage_size_list,house_pv,sp_pv,pandr_pv):
         
         for day in range(start,end):
             time_index=list(range(day*48,day*48+48))
-            cml=([-1.]+[0.]*(48-1)+[1.])*(48-1)+[-1.]
+            cml=([-1.]+[0.]*(48-1)+[1.])*(48-1)+[-1.]       #List to create matrix to multiply with amount of energy stored in each time period to calculate the change in energy stored
             #cml=([-math.sqrt(0.85)]+[0.]*(duration-1)+[math.sqrt(0.85)])*(duration-1)+[-math.sqrt(0.85)]
             #cml=([-0.85]+[0.]*(duration-1)+[0.85])*(duration-1)+[-0.85]
             cm=matrix(cml,(48,48))
@@ -420,12 +420,12 @@ def cvxopt(storage_size_list,house_pv,sp_pv,pandr_pv):
             i4=(e<=emax)
             i5=(b<=pmax)
             i6=(s<=pmax)
-            i7=(c<=charge_pmax)
+            i7=(c<=charge_pmax) #Maximum power of storage
             i8=(d<=charge_pmax)
             i9=(c>=zero)
             i10=(d>=zero)
-            i11=(c[47]-d[47]+e[47]>=matrix([0.]))
-            i12=(c[47]-d[47]+e[47]<=matrix([storage_max]))
+            i11=(c[47]-d[47]+e[47]>=matrix([0.]))       #Energy in storage always > 0
+            i12=(c[47]-d[47]+e[47]<=matrix([storage_max]))  #Energy in storage always < maximum capacity
             
             e1=(c/eff-d*eff+load-pv==b-s)
             if day == start:
@@ -450,7 +450,7 @@ def cvxopt(storage_size_list,house_pv,sp_pv,pandr_pv):
         #print(c.value[47]*eff-d.value[47]/eff+e.value[47])
         
 #        print(day_cost)
-        
+        #Calculate actual energy flow based on prediction of CVXOPT
         buy=[]
         charge_power_l=[]
         balancing_l=[]
@@ -533,8 +533,6 @@ def conditional(storage_size_list,house_pv,sp_pv,pandr_pv):
         #Create storage by create_storage(stroage,capacity,charge and discharge power, efficiency,initial cost)
         storage=create_storage(storage,storage_max,storage_max/8,math.sqrt(0.85),storage_max*21.8)
         [buy_price,sell_price]=price()
-        start=0
-        end=365
         [buy,total_output,total_load,balancing]=energy_system_conditioal(pv,load,storage,buy_price,sell_price,list(range(0,365)))
         running_cost=market(buy,sell_price,buy_price)
 #        plot_power(total_output[start*48-1:end*48],total_load[start*48-1:end*48],balancing[start*48-1:end*48])
