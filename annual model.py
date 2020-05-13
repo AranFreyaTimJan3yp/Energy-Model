@@ -5,6 +5,9 @@ Created on Wed Nov  6 12:43:05 2019
 @author: Timothy Tam
 """
 
+#import timeit
+#
+#code_time="""
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -20,6 +23,7 @@ def solar_data():
     #Read solar data from csv file
     capacity_factor=[]
     import csv
+#    with open('pv_38.csv',newline='') as csvfile:
     with open('pv_38_2018.csv',newline='') as csvfile:
         raw_solar_data=csv.reader(csvfile,delimiter=',')
         line = 0
@@ -37,6 +41,7 @@ def solar_data():
 def solar_data_flat():
     capacity_factor=[]
     import csv
+#    with open('pv_0.csv',newline='') as csvfile:
     with open('pv_0_2018.csv',newline='') as csvfile:
         raw_solar_data=csv.reader(csvfile,delimiter=',')
         line = 0
@@ -54,6 +59,7 @@ def solar_data_flat():
 def solar_data_10():
     capacity_factor=[]
     import csv
+#    with open('pv_10.csv',newline='') as csvfile:
     with open('pv_10_2018.csv',newline='') as csvfile:
         raw_solar_data=csv.reader(csvfile,delimiter=',')
         line = 0
@@ -237,23 +243,23 @@ def energy_system(pv,load,storage):
         buy.append(-dexcess)
     return [buy,total_output,total_load,balancing]
 
-def energy_system_conditioal(pv,load,storage,buy_price,sell_price,period,n):      #period indicates which day of year the energy system is run
+def energy_system_conditioal(pv,load,storage,buy_price,sell_price,period):      #period indicates which day of year the energy system is run
     total_output=np.array([0]*len(pv[0]['output']),dtype=float)
     for pvid in pv:
         total_output+=pv[pvid]['output']
-#    fix_load=np.array(load[1]+load[3])        #load which assmued to be accurately predicted, which is heat load
-#    float_load=np.array(load[0])+np.array(load[2])  #Load which cannot be predicited accurately
     total_load=np.array([0]*len(load[0]),dtype=float)
     for loadid in load:
         total_load+=np.array(load[loadid])
+    opt_n=[0,6,7,8,8,12,11,12,9,9,1,0]              #Optimum value of n for each month
     excess=total_output-total_load
     storage_time=0                                  #At time 0, storage has now charge. Storage records the charge avaliable for this time slot
     buy=[]                                          #Power bought from market, negative means sold
     balancing=[]                                    #Record power taken or given by storage to meet excess power, after accounting efficiency
+#    print(period)
     for day in period:
 #        float_load_est=float_load[48*(day-7):48*(day-5)]
 #        max_sell_price=np.amax(sell_price[48*day:48*day+47])
-        max_sell_price_t=np.argmax(sell_price[48*day:48*day+47]) #Find the index of maximum sell price of the day
+#        max_sell_price_t=np.argmax(sell_price[48*day:48*day+47]) #Find the index of maximum sell price of the day
         max_sell_price_t_list=np.flip(np.argsort(sell_price[48*day:48*day+47]))  #List of times with desecding sell price
 #        sunrise=0
 #        for sun in total_output[48*(day+1):]:       #Find the sunrise of next day
@@ -261,13 +267,15 @@ def energy_system_conditioal(pv,load,storage,buy_price,sell_price,period,n):    
 #                break
 #            sunrise+=1
 #        save=max(0,-sum(total_output[day*48+max_sell_price_t:day*48+38])+sum(float_load_est[max_sell_price_t:38])+sum(fix_load[day*48+max_sell_price_t:day*48+38]))            #Maximum price always occur between t=31 and t=38, this sum all estimated load between maximum price and 19:00
-        max_buy_price=np.amax(buy_price[day*48+39:day*48+78])    #Find maximum buy price between 19:00 of today and 16:00 of tomorrow
+#        max_buy_price=np.amax(buy_price[day*48+39:day*48+78])    #Find maximum buy price between 19:00 of today and 16:00 of tomorrow
 #        print(max_sell_price-max_buy_price)
+        month=int(day/(365/12))
+        n=opt_n[month]
         for t in range(48):
             dexcess=excess[day*48+t]
             balancing.append(0)
             for storageid in storage:                   #run through all storage facilities               
-                if t in max_sell_price_t_list[0:n]:     #Decide how many time periods will be used for forced export
+                if t in max_sell_price_t_list[0:6]:     #Decide how many time periods will be used for forced export
 #                if 31<=t<=38 and dexcess>=0:
 #                if max_sell_price_t==t:    #Sell everything when max_sell_price>max_buy_price
 #                if sell_price[t]>=max_buy_price and 31<=t<=38:
@@ -310,7 +318,7 @@ def plot_demand(total_output,total_load,balancing):
     p3=ax.fill_between(time_list,0,(total_output+balancing)/500,step='pre',color='y',label='system output')
     ax.set_xlim([time_list[0],time_list[-1]])
     ax.set_ylim([0,55])
-    plt.title('Exporting when Export Price > Import Price')
+    plt.title('Force Discharge during 6 Highest Export Price')
     plt.ylabel('power (MW)')
     plt.xlabel('time')
     fig.legend(loc='upper center', bbox_to_anchor=(0.76, 0.9), ncol=1)
@@ -330,7 +338,7 @@ def plot_average(total_output,total_load,balancing):
     p3=ax.fill_between(t_list,0,average_output+average_balancing,step='pre',color='y',label='system output')
     ax.set_xlim([0,24])
     ax.set_ylim([0,25])
-    plt.xticks([0,6,12,18,24])
+    plt.xticks(np.array(range(9))*3,['00:00','03:00','06:00','09:00','12:00','15:00','18:00','21:00','00:00'])
     plt.ylabel('power (MW)')
     plt.xlabel('time')
     plt.title('Average Power in Simple System of 2018')
@@ -366,159 +374,36 @@ def captial_cost(pv,storage):
         cost+=storage[storageid]['initial_cost']
     return cost
 
-house_pv=231600*0.9*0.2
-sp_pv=88000*0.9*0.2
-pandr_pv=11520*0.9*0.2
-'''
-#Create pv assest by create_pv(pv,capacity,initial_cost,capacity_factor)
-#pv=create_pv(pv,house_pv*0.86,house_pv*56.95,solar_data())
-#pv=create_pv(pv,sp_pv*0.86,sp_pv*56.95,solar_data_flat())
-#pv=create_pv(pv,2400,10*2400,solar_data_10())
-#Create load by create_load(load,list of load power in time)
-load=create_load(load,residential())
-load=create_load(load,load_heat_data())
-load=create_load(load,load_sciencepark())
-#Create storage by create_storage(stroage,capacity,charge and discharge power, efficiency,initial cost)
-storage=create_storage(storage,0,0,1,0*15)
-[buy,total_output,total_load,balancing]=energy_system(pv,load,storage)
-[buy_price,sell_price]=price()
-running_cost=market(buy,sell_price,buy_price)
-initial_cost=captial_cost(pv,storage)
-total_cost=running_cost+initial_cost
-plot_demand(total_output,total_load,balancing)
-print('Operating cost is ',running_cost, ', initial cost is ',initial_cost,', total cost is ',total_cost)
-'''
-'''
-load=create_load(load,residential())
-load=create_load(load,load_heat_data())
-load=create_load(load,load_sciencepark())
+house_pv=231600*0.2
+sp_pv=88000*0.2
+pandr_pv=11520*0.2
 
-
-total_cost_list=np.array([])
-initial_cost_list=np.array([])
-pv_list=np.array(range(0,11))*0.1
-[buy_price,sell_price]=price()
-for capacity in pv_list:
-    #Create storage by create_storage(stroage,capacity,charge and discharge power, efficiency,initial cost)
-    pv={}
-    storage={}
-    storage=create_storage(storage,0,0,1,0)
-    pv=create_pv(pv,capacity*0.9*house_pv,capacity*house_pv*56.95,solar_data())
-    pv=create_pv(pv,capacity*0.9*sp_pv,capacity*sp_pv*56.95,solar_data_flat())    
-    [buy,total_output,total_load,balancing]=energy_system(pv,load,storage)
-    running_cost=market(buy,sell_price,buy_price)
-    initial_cost=captial_cost(pv,storage)
-    total_cost=running_cost+initial_cost
-    initial_cost_list=np.append(initial_cost_list,initial_cost)
-    total_cost_list=np.append(total_cost_list,total_cost)
-ax.plot(pv_list,total_cost_list/1e6,'-k',label='total cost')
-ax.fill_between(pv_list,total_cost_list/1e6,initial_cost_list/1e6,label='trading cost')
-ax.fill_between(pv_list,0,initial_cost_list/1e6,label='capital cost')
-plt.axis([0,1,0,6])
-ax.set_xlabel('Fraction of Maximum amount of PV installed')
-ax.set_ylabel('Total Annual Cost (Million pounds)')
-ax.set_title('Annual cost against amount of PV')
-plt.grid()
-ax.legend()
-'''
-
-fig,ax=plt.subplots()
-
-
-#storage_list=np.array(range(21))*5000
-pv_list=np.array(range(0,11))/10
-#storage_cost_list=[8.5,14.2,23.2]
-#labels=['low','medium','high']
-#for storage_cost in range(len(storage_cost_list)):
-#colors=['-b','-m','-y','-c','-r','-.b','-.m','-.y','-.c']
-#n_list=[0,2,4,6,7,8]
-n_list=list(range(9))
-#for n in n_list:
-#    running_cost_list=[]
-#    total_cost_list=[]
-for pvf in pv_list:
-    #    total_cost=0
-    #for pv_f in pv_list:
-    #for year in range(0,20):
-    load={}
-    pv={}
-    storage={}
-    #    pv_eff=1-0.007*year
-    pv=create_pv(pv,house_pv*0.9*pvf,house_pv*56.95/365*31,solar_data())
-    pv=create_pv(pv,sp_pv*0.9*pvf,sp_pv*56.95/365*31,solar_data_flat())
-    pv=create_pv(pv,pandr_pv*0.9*pvf,pandr_pv*56.95/365*31,solar_data_10())
-    #Create load by create_load(load,list of load power in time)
-    load=create_load(load,residential())            #load_id = 0
-    load=create_load(load,load_heat_data())         #load_id = 1
-    load=create_load(load,load_sciencepark())       #load_id = 2
-    load=create_load(load,hot_water())              #load_id = 3
-    load=create_load(load,car_charging())
-    #Create storage by create_storage(stroage,capacity,charge and discharge power, efficiency,initial cost)
-#        storage_size=60000
-    storage=create_storage(storage,storage_size,storage_size/8,math.sqrt(0.85),storage_size*14.2/365*31)
-    [buy_price,sell_price]=price()
-    start=181
-    end=212
-    [buy,total_output,total_load,balancing]=energy_system_conditioal(pv,load,storage,buy_price,sell_price,list(range(start,end)),n)
-    #[buy,total_output,total_load,balancing]=energy_system(pv,load,storage)
-    running_cost=market(buy,sell_price[start*48:end*48],buy_price[start*48:end*48])
-    initial_cost=captial_cost(pv,storage)
-    total_cost=running_cost+initial_cost
-    total_cost_list.append(total_cost)
-#        running_cost_list.append(running_cost)
-ax.plot(storage_list/1000,np.array(total_cost_list)/1e3,colors[n],label=('n='+str(n)))
-plt.xlim([0,max(storage_list/1000)])
-plt.xlabel('storage size (MWh)')
-plt.ylabel('total Monthly Cost (thousands pounds)')
-plt.title('Total Cost of July with Different n')
-fig.legend(loc='upper center', bbox_to_anchor=(1.1, 0.7), ncol=2)
-#fig.legend(loc='upper center', bbox_to_anchor=(0.6, 0.7), ncol=2)
-plt.grid()
-plt.savefig('conditional July n.png',dpi=1200)
-#total_cost=running_cost+initial_cost
-#plot_demand(total_output[start*48:end*48],total_load[start*48:end*48],balancing)
-#print('Operating cost is ',running_cost, ', initial cost is ',initial_cost,', total cost is ',total_cost)
-    #    print(sum(total_output[start*48:end*48]-total_load[start*48:end*48]+buy))
-        #print(max(max(buy),-min(buy)))
-    #    total_cost+=(storage_size*207+(house_pv+sp_pv+pandr_pv)*1139)
-#        total_cost_list.append(total_cost)
-#    total_cost_list=np.array(total_cost_list)/1e6
-#    ax.plot(storage_list/1000,total_cost_list,label=labels[storage_cost])
-#    print(storage_list[np.argmin(total_cost_list)])
-    #ax.plot([0,1],[total_cost_list[0],total_cost_list[0]],'-.k',label='business as usual')
-#plt.xlim([0,max(storage_list)/1000])
-##plt.ylim([4,4.5])
-##plt.xlabel('Fraction of Maximum PV Size')
-#plt.xlabel('Stroage Size (MWh)')
-#plt.ylabel('Total Cost (Million pounds)')
-#plt.title('Total Cost against Storage Size')
-#fig.legend(loc='upper center', bbox_to_anchor=(0.8, 0.7), ncol=1)
-#plt.grid()
-#plt.savefig('simple system cost storage.png',dpi=1200)
-
-
-#print(storage_list[np.argmin(total_cost_list)])
-'''
 
 load={}
 pv={}
 storage={}
-pv=create_pv(pv,house_pv*0.9*0,house_pv*56.95,solar_data())
-#pv=create_pv(pv,sp_pv*0.9,sp_pv*56.95,solar_data_flat())
-#pv=create_pv(pv,pandr_pv*0.9,pandr_pv*56.95,solar_data_10())
+pv=create_pv(pv,house_pv,house_pv*56.95,solar_data())
+pv=create_pv(pv,sp_pv,sp_pv*56.95,solar_data_flat())
+pv=create_pv(pv,pandr_pv,pandr_pv*56.95,solar_data_10())
 #Create load by create_load(load,list of load power in time)
 load=create_load(load,residential())            #load_id = 0
 load=create_load(load,load_heat_data())         #load_id = 1
 load=create_load(load,load_sciencepark())       #load_id = 2
 load=create_load(load,hot_water())              #load_id = 3
 load=create_load(load,car_charging())
-storage=create_storage(storage,0,0/8,math.sqrt(0.85),30000*14.2)
-[buy2,total_output2,total_load2,balancing2]=energy_system(pv,load,storage)
 [buy_price,sell_price]=price()
+storage=create_storage(storage,40000,40000/8,math.sqrt(0.85),40000*14.2)
+start=0
+end=365
+#[buy2,total_output2,total_load2,balancing2]=energy_system(pv,load,storage)
+[buy2,total_output2,total_load2,balancing2]=energy_system_conditioal(pv,load,storage,buy_price,sell_price,list(range(start,end)))
 running_cost=market(buy2,sell_price,buy_price)
 initial_cost=captial_cost(pv,storage)
 total_cost=running_cost+initial_cost
-plot_demand(total_output2,total_load2,balancing2)
+#plot_demand(total_output2[start*48:end*48],total_load2[start*48:end*48],balancing2[start*48:end*48])
+plot_demand(total_output2[start*48:end*48],total_load2[start*48:end*48],balancing2)
 #plot_average(total_output2,total_load2,balancing2)
 print('Operating cost is ',running_cost, ', initial cost is ',initial_cost,', total cost is ',total_cost)
-'''
+#"""
+#elapsed_time=timeit.timeit(code_time,number=100)/100
+#print(elapsed_time)
